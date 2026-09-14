@@ -1,0 +1,52 @@
+# Dependencies
+node_modules/
+
+# Build output
+out/
+dist/
+build/
+release/
+.vite/
+
+# Environment / secrets
+.env
+.env.local
+.env.*.local
+
+# Bundled Python runtime (large binaries — fetch via setup script instead)
+python_bin/
+python.zip
+python-installer.exe
+get-pip.py
+
+# App data / runtime state (per-user, not source)
+.dima_data/
+scratch/
+
+# Logs
+*.log
+logs/
+
+# Editor / OS
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Test artifacts
+test-results/
+playwright-report/
+coverage/
+
+# Dev debris: not part of the app, not imported anywhere, not needed to build/run.
+# recovery.js/recover.js/test-slack-auth.ts reference a separate project's internal
+# DB schema and a real-looking user id; extracted_*.txt are scraped page dumps.
+recover.js
+recovery.js
+test-slack-auth.ts
+extracted_pages.txt
+extracted_ui.txt
+
+# Third-party reference repos cloned for the gsap-advanced-animations skill docs
+# (~293MB, own git history, not part of the DIMA app)
+skills/gsap-advanced-animations/repos/
