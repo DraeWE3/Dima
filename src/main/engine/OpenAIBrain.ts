@@ -50,7 +50,7 @@ export class OpenAIBrain {
     this.model = process.env.DIMA_MODEL || 'gpt-4o';
   }
 
-  async generateQAScript(objective: string, url: string, testType: 'functional' | 'security' = 'functional'): Promise<string> {
+  async generateQAScript(objective: string, url: string, testType: 'functional' | 'security' = 'functional', model?: string): Promise<string> {
     try {
       if (process.env.OPENAI_API_KEY) {
         const systemPrompt = testType === 'security'
@@ -65,7 +65,7 @@ CRITICAL RULES:
 Return ONLY valid Javascript code. Do not wrap in markdown.`;
 
         const response = await this.openai.chat.completions.create({
-          model: this.model,
+          model: model || this.model,
           messages: [
             { role: 'system', content: systemPrompt },
             { role: 'user', content: `Objective: ${objective}\nURL: ${url}` }
@@ -92,7 +92,7 @@ const { chromium } = require('playwright');
     `;
   }
 
-  async evaluateQAResult(output: string, screenshotsBase64: string[] = [], workspacePath?: string): Promise<{ status: 'PASS' | 'FAIL' | 'USER_INPUT', feedback: string }> {
+  async evaluateQAResult(output: string, screenshotsBase64: string[] = [], workspacePath?: string, model?: string): Promise<{ status: 'PASS' | 'FAIL' | 'USER_INPUT', feedback: string }> {
     try {
       if (process.env.OPENAI_API_KEY) {
         const treeOutput = workspacePath ? listWorkspaceFiles(workspacePath) : '';
@@ -119,7 +119,7 @@ If human input is required, return: "[REQUEST_USER_INPUT]: <reason>".`;
         });
 
         const response = await this.openai.chat.completions.create({
-          model: this.model,
+          model: model || this.model,
           messages: [
             { role: 'system', content: systemPrompt },
             { role: 'user', content: userContent }
@@ -141,7 +141,7 @@ If human input is required, return: "[REQUEST_USER_INPUT]: <reason>".`;
     return { status: 'PASS', feedback: '' };
   }
 
-  async evaluateIntegrationResult(httpTrace: string, workspacePath?: string): Promise<{ status: 'PASS' | 'FAIL' | 'USER_INPUT', feedback: string }> {
+  async evaluateIntegrationResult(httpTrace: string, workspacePath?: string, model?: string): Promise<{ status: 'PASS' | 'FAIL' | 'USER_INPUT', feedback: string }> {
     try {
       if (process.env.OPENAI_API_KEY) {
         const treeOutput = workspacePath ? listWorkspaceFiles(workspacePath) : '';
@@ -162,7 +162,7 @@ Here is the workspace file structure to help you map the bug to the correct file
 ${treeOutput}`;
 
         const response = await this.openai.chat.completions.create({
-          model: this.model,
+          model: model || this.model,
           messages: [
             { role: 'system', content: systemPrompt },
             { role: 'user', content: `HTTP/Execution Trace:\n${httpTrace}` }
@@ -185,11 +185,12 @@ ${treeOutput}`;
   }
 
   async analyzeFailure(
-    errorData: any, 
-    type: 'build' | 'runtime', 
-    acceptanceCriteria: string[] = []
+    errorData: any,
+    type: 'build' | 'runtime',
+    acceptanceCriteria: string[] = [],
+    model?: string
   ): Promise<string> {
-    console.log(`Analyzing ${type} failure with ${this.model}...`);
+    console.log(`Analyzing ${type} failure with ${model || this.model}...`);
     try {
       if (process.env.OPENAI_API_KEY) {
         const prompt = type === 'build' 
@@ -197,7 +198,7 @@ ${treeOutput}`;
           : `The runtime browser verification failed. The acceptance criteria were: ${JSON.stringify(acceptanceCriteria)}\n\nThe console captured these errors:\n${JSON.stringify(errorData)}\n\nAct as a Senior QA Engineer. Analyze these runtime errors and write a concise, highly specific prompt instructing the coding agent (Antigravity) on exactly how to fix them.`;
 
         const response = await this.openai.chat.completions.create({
-          model: this.model,
+          model: model || this.model,
           messages: [
             { role: 'system', content: 'You are DIMA, an intelligent QA/Project Manager overseeing an autonomous coding agent. Your job is to analyze errors and provide smart, targeted instructions to the coder to fix them.' },
             { role: 'user', content: prompt }
@@ -230,11 +231,11 @@ ${treeOutput}`;
     return 'I am acting as your Supervisor. The Antigravity agent is currently executing tasks in the background. I will run the verification checks once it finishes.';
   }
 
-  async generateAcceptanceCriteria(objective: string): Promise<string[]> {
+  async generateAcceptanceCriteria(objective: string, model?: string): Promise<string[]> {
     try {
       if (process.env.OPENAI_API_KEY) {
         const response = await this.openai.chat.completions.create({
-          model: this.model,
+          model: model || this.model,
           response_format: { type: 'json_object' },
           messages: [
             { role: 'system', content: 'You are DIMA, an intelligent QA Engineer. Break down the user\'s objective into 3-5 strict, testable acceptance criteria. Return a JSON object with a single key "criteria" containing an array of strings.' },

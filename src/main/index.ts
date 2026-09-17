@@ -6,8 +6,12 @@ import { DimaEngine } from './engine/DimaEngine'
 import { exec } from 'child_process'
 import util from 'util'
 import { log, installGlobalErrorHandlers } from './utils/logger'
+import { mcpClientManager } from './mcp/McpClientManager'
+import { initAppConfig, getAppConfigForUI, setApiKey, setModelConfig } from './config/AppConfig'
 
 installGlobalErrorHandlers('main')
+initAppConfig()
+db.reconcileOrphanedMissions()
 
 const execPromise = util.promisify(exec)
 const dima = new DimaEngine()
@@ -18,6 +22,7 @@ function createWindow(): void {
     height: 800,
     show: false,
     autoHideMenuBar: true,
+    icon: join(__dirname, '../../resources/icon.png'),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: false
@@ -47,11 +52,18 @@ app.whenReady().then(() => {
   })
 
   ipcMain.handle('get-missions', () => {
-    return db.getMissions()
+    // Summary only (no per-mission logs) - the full history is 7500+ missions
+    // and several MB on disk; shipping that whole to the renderer every poll
+    // is what was making the UI feel slow/stale.
+    return db.getMissionsSummary()
   })
 
   ipcMain.handle('get-mission', (_, id) => {
     return db.getMission(id)
+  })
+
+  ipcMain.handle('get-mission-stats', () => {
+    return db.getStats()
   })
 
   ipcMain.handle('select-files', async () => {
@@ -115,6 +127,73 @@ app.whenReady().then(() => {
       return false;
     }
   })
+
+  ipcMain.handle('get-mcp-servers', () => {
+    return mcpClientManager.getStatus()
+  })
+
+  ipcMain.handle('add-mcp-server', async (_, data) => {
+    try {
+      const config = await mcpClientManager.addServer(data.name, data.command, data.args)
+      return { ok: true, config }
+    } catch (e: any) {
+      log.error('add-mcp-server failed', e)
+      return { ok: false, error: e.message }
+    }
+  })
+
+  ipcMain.handle('remove-mcp-server', async (_, id) => {
+    await mcpClientManager.removeServer(id)
+    return true
+  })
+
+  ipcMain.handle('reconnect-mcp-server', async (_, id) => {
+    const ok = await mcpClientManager.reconnectServer(id)
+    return { ok }
+  })
+
+  ipcMain.handle('get-antigravity-status', () => {
+    try {
+      const fs = require('fs')
+      const os = require('os')
+      const path = require('path')
+      const p = path.join(os.homedir(), '.dima_data', 'mcp_connection.json')
+      if (!fs.existsSync(p)) return { connected: false }
+      const data = JSON.parse(fs.readFileSync(p, 'utf-8'))
+      const isFresh = Date.now() - data.updatedAt < 25000
+      return { connected: isFresh }
+    } catch (e) {
+      log.error('get-antigravity-status failed', e)
+      return { connected: false }
+    }
+  })
+
+  ipcMain.handle('get-app-config', () => {
+    return getAppConfigForUI()
+  })
+
+  ipcMain.handle('set-api-key', (_, apiKey: string) => {
+    return setApiKey(apiKey)
+  })
+
+  ipcMain.handle('set-model-config', (_, data: { defaultModel: string; models: string[] }) => {
+    return setModelConfig(data.defaultModel, data.models)
+  })
+
+  ipcMain.handle('get-agent-connect-info', () => {
+    const dimaMcpPath = join(__dirname, 'dima-mcp.js')
+    // Published as the "dima-mcp" npm package: works on any machine with no
+    // path to configure. Falls back to this exact install's local path for
+    // anyone testing before the package is published, or running from source.
+    const npxConfig = { mcpServers: { dima: { command: 'npx', args: ['-y', 'dima-mcp'] } } }
+    const localConfig = { mcpServers: { dima: { command: 'node', args: [dimaMcpPath] } } }
+    return {
+      configSnippet: JSON.stringify(npxConfig, null, 2),
+      localConfigSnippet: JSON.stringify(localConfig, null, 2),
+    }
+  })
+
+  mcpClientManager.initialize().catch(err => log.error('Failed to initialize MCP client manager', err))
 
   createWindow()
 

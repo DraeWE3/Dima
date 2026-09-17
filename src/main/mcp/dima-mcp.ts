@@ -541,9 +541,28 @@ const https = require('https');
   throw new Error(`Unknown tool: ${request.params.name}`);
 });
 
+const os = require('os');
+const fs = require('fs');
+const connectionStatusPath = path.join(os.homedir(), '.dima_data', 'mcp_connection.json');
+
+function writeHeartbeat() {
+  try {
+    const dir = path.dirname(connectionStatusPath);
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(connectionStatusPath, JSON.stringify({ connected: true, pid: process.pid, updatedAt: Date.now() }));
+  } catch (e) {
+    log.error('Failed to write MCP connection heartbeat', e);
+  }
+}
+
 async function run() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
+  // A client (Antigravity, Claude Code, etc.) is now attached over stdio.
+  // Heartbeat lets the desktop app detect "is something actually connected"
+  // without any direct channel between this process and the Electron app.
+  writeHeartbeat();
+  setInterval(writeHeartbeat, 10000);
 }
 
-run().catch(console.error);
+run().catch(err => log.error('MCP server failed to start', err));

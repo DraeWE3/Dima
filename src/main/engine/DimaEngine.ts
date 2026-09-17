@@ -12,10 +12,10 @@ export class DimaEngine {
 
   async startMission(missionId: string, workspacePath: string, prompt: string, model: string) {
     db.updateMissionStatus(missionId, 'IN_PROGRESS');
-    db.addLog(missionId, { role: 'system', content: `[DIMA] Analyzing objective with ${process.env.DIMA_MODEL || 'GPT-4o'}...`, timestamp: Date.now() });
-    
+    db.addLog(missionId, { role: 'system', content: `[DIMA] Analyzing objective with ${model || process.env.DIMA_MODEL || 'GPT-4o'}...`, timestamp: Date.now() });
+
     try {
-      const criteria = await this.openai.generateAcceptanceCriteria(prompt);
+      const criteria = await this.openai.generateAcceptanceCriteria(prompt, model);
       db.addLog(missionId, { role: 'system', content: `[DIMA] Acceptance Criteria established:\n- ${criteria.join('\n- ')}`, timestamp: Date.now() });
 
       const missionEngine = new MissionEngine(this.openai);
@@ -43,11 +43,12 @@ export class DimaEngine {
     }
     
     // Restart loop since it was idle, flag as resuming
-    const criteria = await this.openai.generateAcceptanceCriteria(finalPrompt);
+    const criteria = await this.openai.generateAcceptanceCriteria(finalPrompt, model);
     missionEngine.runMissionLoop(missionId, mission.workspacePath, finalPrompt, criteria, model, true).catch(console.error);
   }
 
   interruptMission(missionId: string) {
+    this.activeMissions.get(missionId)?.adapter.interrupt(missionId);
     db.updateMissionStatus(missionId, 'IDLE');
     db.addLog(missionId, { role: 'system', content: `[DIMA] Mission Interrupted by User.`, timestamp: Date.now() });
   }
